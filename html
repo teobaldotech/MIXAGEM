@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mixer DJ com Equalizador e Crossfader com Curvas</title>
+  <style>
+    body {
+      background: #111;
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    h1 {
+      color: #0f0;
+      margin-bottom: 40px;
+    }
+    .deck {
+      display: inline-block;
+      margin: 20px;
+      padding: 20px;
+      background: #222;
+      border-radius: 10px;
+      width: 90%;
+      max-width: 420px;
+      vertical-align: top;
+      box-shadow: 0 0 10px #000;
+    }
+    input[type="range"] {
+      width: 200px;
+    }
+    .waveform {
+      height: 80px;
+      margin-top: 10px;
+      background: #333;
+      border-radius: 4px;
+    }
+    .eq-group {
+      margin-top: 15px;
+    }
+    .crossfader {
+      margin-top: 50px;
+    }
+    .time {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #aaa;
+    }
+    select {
+      background: #222;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 4px;
+      margin-left: 10px;
+      font-size: 16px;
+    }
+    @media (max-width: 900px) {
+      .deck {
+        display: block;
+        margin: 10px auto;
+      }
+    }
+  </style>
+  <script src="https://unpkg.com/wavesurfer.js"></script>
+</head>
+<body>
+
+  <h1>🎧 DJ Mixer com Equalizador 3 Bandas e Crossfader com Curvas</h1>
+
+  <div class="deck" id="deckA">
+    <h2>Deck A</h2>
+    <input type="file" accept="audio/*" onchange="loadTrack(this, 'A')"><br><br>
+    <button onclick="play('A')">▶️ Play</button>
+    <button onclick="pause('A')">⏸️ Pause</button><br><br>
+    <label>Volume A</label><br>
+    <input type="range" min="0" max="1" step="0.01" value="1" onchange="setVolume(this.value, 'A')"><br><br>
+
+    <div class="eq-group">
+      <label>Graves (A)</label><br>
+      <input type="range" min="-30" max="30" value="0" step="1" onchange="setEQ('A', 'low', this.value)">
+      <br>
+      <label>Médios (A)</label><br>
+      <input type="range" min="-30" max="30" value="0" step="1" onchange="setEQ('A', 'mid', this.value)">
+      <br>
+      <label>Agudos (A)</label><br>
+      <input type="range" min="-30" max="30" value="0" step="1" onchange="setEQ('A', 'high', this.value)">
+    </div>
+
+    <div id="waveA" class="waveform"></div>
+    <div id="timeA" class="time">00:00</div>
+  </div>
+
+  <div class="deck" id="deckB">
+    <h2>Deck B</h2>
+    <input type="file" accept="audio/*" onchange="loadTrack(this, 'B')"><br><br>
+    <button onclick="play('B')">▶️ Play</button>
+    <button onclick="pause('B')">⏸️ Pause</button><br><br>
+    <label>Volume B</label><br>
+    <input type="range" min="0" max="1" step="0.01" value="1" onchange="setVolume(this.value, 'B')"><br><br>
+
+    <div class="eq-group">
+      <label>Graves (B)</label><br>
+      <input type="range" min="-30" max="30" value="0" step="1" onchange="setEQ('B', 'low', this.value)">
+      <br>
+      <label>Médios (B)</label><br>
+      <input type="range" min="-30" max="30" value="0" step="1" onchange="setEQ('B', 'mid', this.value)">
+      <br>
+      <label>Agudos (B)</label><br>
+      <input type="range" min="-30" max="30" value="0" step="1" onchange="setEQ('B', 'high', this.value)">
+    </div>
+
+    <div id="waveB" class="waveform"></div>
+    <div id="timeB" class="time">00:00</div>
+  </div>
+
+  <div class="crossfader">
+    <h2>🎚️ Crossfader</h2>
+    <input type="range" id="xfader" min="0" max="1" step="0.01" value="0.5" onchange="crossfade(this.value)">
+    <br><br>
+    <label for="curve">Curva:</label>
+    <select id="curve" onchange="crossfade(document.getElementById('xfader').value)">
+      <option value="linear">Linear</option>
+      <option value="exponential">Exponencial</option>
+      <option value="log">Logarítmica</option>
+      <option value="s">Curva em S</option>
+    </select>
+  </div>
+
+  <script>
+    // Inicializa WaveSurfer para cada deck
+    const wavesurferA = WaveSurfer.create({
+      container: '#waveA',
+      waveColor: '#0f0',
+      progressColor: '#0ff',
+      height: 80,
+      responsive: true
+    });
+
+    const wavesurferB = WaveSurfer.create({
+      container: '#waveB',
+      waveColor: '#f00',
+      progressColor: '#ff0',
+      height: 80,
+      responsive: true
+    });
+
+    const ctx = wavesurferA.backend.ac;
+
+    function createEQChain() {
+      const low = ctx.createBiquadFilter();
+      low.type = 'lowshelf';
+      low.frequency.value = 320;
+
+      const mid = ctx.createBiquadFilter();
+      mid.type = 'peaking';
+      mid.frequency.value = 1000;
+      mid.Q.value = 1;
+
+      const high = ctx.createBiquadFilter();
+      high.type = 'highshelf';
+      high.frequency.value = 3200;
+
+      const gain = ctx.createGain();
+
+      low.connect(mid);
+      mid.connect(high);
+      high.connect(gain);
+      gain.connect(ctx.destination);
+
+      return { low, mid, high, gain };
+    }
+
+    const deckNodes = {
+      A: createEQChain(),
+      B: createEQChain()
+    };
+
+    wavesurferA.backend.setFilter([deckNodes.A.low, deckNodes.A.mid, deckNodes.A.high]);
+    wavesurferB.backend.setFilter([deckNodes.B.low, deckNodes.B.mid, deckNodes.B.high]);
+
+    wavesurferA.on('audioprocess', () => {
+      document.getElementById('timeA').textContent = formatTime(wavesurferA.getCurrentTime());
+    });
+
+    wavesurferB.on('audioprocess', () => {
+      document.getElementById('timeB').textContent = formatTime(wavesurferB.getCurrentTime());
+    });
+
+    function formatTime(seconds) {
+      const min = Math.floor(seconds / 60).toString().padStart(2, '0');
+      const sec = Math.floor(seconds % 60).toString().padStart(2, '0');
+      return `${min}:${sec}`;
+    }
+
+    function loadTrack(input, deck) {
+      const file = input.files[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      if (deck === 'A') {
+        wavesurferA.load(url);
+        wavesurferA.once('ready', () => URL.revokeObjectURL(url));
+      } else {
+        wavesurferB.load(url);
+        wavesurferB.once('ready', () => URL.revokeObjectURL(url));
+      }
+    }
+
+    function play(deck) {
+      if (deck === 'A') wavesurferA.play();
+      if (deck === 'B') wavesurferB.play();
+    }
+
+    function pause(deck) {
+      if (deck === 'A') wavesurferA.pause();
+      if (deck === 'B') wavesurferB.pause();
+    }
+
+    function setVolume(value, deck) {
+      deckNodes[deck].gain.gain.value = parseFloat(value);
+    }
+
+    // Crossfader com curvas
+    function crossfade(value) {
+      const val = parseFloat(value);
+      const curve = document.getElementById('curve').value;
+
+      let gainA = 1, gainB = 1;
+
+      switch (curve) {
+        case 'linear':
+          gainA = 1 - val;
+          gainB = val;
+          break;
+        case 'exponential':
+          gainA = Math.pow(1 - val, 2);
+          gainB = Math.pow(val, 2);
+          break;
+        case 'log':
+          gainA = Math.sqrt(1 - val);
+          gainB = Math.sqrt(val);
+          break;
+        case 's': // Curva em S (equal power)
+          gainA = Math.cos(val * 0.5 * Math.PI);
+          gainB = Math.sin(val * 0.5 * Math.PI);
+          break;
+        default:
+          gainA = 1 - val;
+          gainB = val;
+      }
+
+      deckNodes.A.gain.gain.value = gainA;
+      deckNodes.B.gain.gain.value = gainB;
+    }
+
+    function setEQ(deck, band, gainValue) {
+      const db = parseFloat(gainValue);
+      deckNodes[deck][band].gain.value = db;
+    }
+
+    // Inicia crossfade neutro no meio
+    crossfade(0.5);
+
+  </script>
+
+</body>
+</html>
